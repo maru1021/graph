@@ -1,0 +1,702 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>折れ線グラフツクール君1号</title>
+    <script src="libs/chart.umd.js"></script>
+    <script src="libs/hammer.min.js"></script>
+    <script src="libs/chartjs-plugin-zoom.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: linear-gradient(135deg, #a8dadc 0%, #d4f1f4 100%);
+            min-height: 100vh;
+            padding: 15px;
+        }
+
+        .container {
+            max-width: 100%;
+            margin: 0 auto;
+            padding: 0 10px;
+        }
+
+        .card {
+            background: white;
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.1);
+            margin-bottom: 15px;
+        }
+
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+            font-size: 24px;
+        }
+
+        .file-input-wrapper {
+            position: relative;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        .file-input-wrapper input[type="file"] {
+            position: absolute;
+            left: -9999px;
+        }
+
+        .file-input-label {
+            display: inline-block;
+            padding: 12px 24px;
+            background: linear-gradient(135deg, #4da8da 0%, #73c5e3 100%);
+            color: white;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-weight: 500;
+        }
+
+        .file-input-label:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(77, 168, 218, 0.4);
+        }
+
+        .chart-container {
+            position: relative;
+            height: 600px;
+            margin-top: 20px;
+        }
+
+        .buttons-left {
+            display: flex;
+            gap: 10px;
+        }
+
+        .offset-section {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px 15px;
+            border: 2px solid #4da8da;
+            border-radius: 8px;
+            background: #f0f8ff;
+        }
+
+        .offset-label-text {
+            font-size: 14px;
+            font-weight: 600;
+            color: #333;
+            white-space: nowrap;
+        }
+
+        .file-list-container {
+            display: inline-flex;
+            gap: 10px;
+            align-items: flex-start;
+        }
+
+        .file-item-control {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .file-name {
+            font-size: 12px;
+            color: #333;
+            font-weight: 500;
+            white-space: nowrap;
+        }
+
+        .offset-input {
+            width: 80px;
+            padding: 6px 10px;
+            border: 2px solid #4da8da;
+            border-radius: 6px;
+            font-size: 14px;
+            text-align: center;
+        }
+
+        .offset-input:focus {
+            outline: none;
+            border-color: #2c8bb8;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="card">
+            <h1>折れ線グラフツクール君1号</h1>
+            <div class="file-input-wrapper">
+                <div class="buttons-left">
+                    <input type="file" id="csvInput" multiple accept=".csv">
+                    <label for="csvInput" class="file-input-label">
+                        CSVファイルを選択（複数可）
+                    </label>
+                    <button id="resetZoomBtn" class="file-input-label" style="display: none;">
+                        ズームリセット
+                    </button>
+                    <button id="exportCsvBtn" class="file-input-label" style="display: none;">
+                        CSV出力
+                    </button>
+                </div>
+                <div id="thresholdSection" class="offset-section" style="display: none;">
+                    <span class="offset-label-text">閾値:</span>
+                    <div style="display: flex; flex-direction: column; gap: 5px;">
+                        <div style="display: flex; align-items: center; gap: 5px;">
+                            <span style="font-size: 12px; font-weight: 500; min-width: 40px;">上限:</span>
+                            <input type="number" id="upperThreshold" class="offset-input" placeholder="上限" style="width: 100px;">
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 5px;">
+                            <span style="font-size: 12px; font-weight: 500; min-width: 40px;">下限:</span>
+                            <input type="number" id="lowerThreshold" class="offset-input" placeholder="下限" style="width: 100px;">
+                        </div>
+                    </div>
+                </div>
+                <div id="offsetSection" class="offset-section" style="display: none;">
+                    <span class="offset-label-text">オフセット:</span>
+                    <div id="fileListContainer" class="file-list-container">
+                        <!-- ファイルリストと位置補正入力欄がここに動的に追加されます -->
+                    </div>
+                </div>
+            </div>
+            <div class="chart-container">
+                <canvas id="myChart"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const colors = [
+            'rgb(255, 99, 132)',
+            'rgb(54, 162, 235)',
+            'rgb(75, 192, 192)',
+            'rgb(255, 205, 86)',
+            'rgb(153, 102, 255)',
+            'rgb(255, 159, 64)',
+            'rgb(199, 199, 199)',
+            'rgb(83, 102, 255)',
+            'rgb(255, 99, 255)',
+            'rgb(99, 255, 132)'
+        ];
+
+        let chart = null;
+        let uploadedFiles = [];
+        let fileOffsets = new Map(); // ファイル名 -> オフセット値
+        let preserveZoom = false; // ズーム状態を保持するかどうかのフラグ
+        let upperThresholdValue = null; // 上限閾値
+        let lowerThresholdValue = null; // 下限閾値
+        let blinkTimer = null; // 点滅タイマー
+        let blinkState = true; // 点滅状態
+
+        const csvInput = document.getElementById('csvInput');
+        const resetZoomBtn = document.getElementById('resetZoomBtn');
+        const exportCsvBtn = document.getElementById('exportCsvBtn');
+        const fileListContainer = document.getElementById('fileListContainer');
+        const offsetSection = document.getElementById('offsetSection');
+        const thresholdSection = document.getElementById('thresholdSection');
+        const upperThresholdInput = document.getElementById('upperThreshold');
+        const lowerThresholdInput = document.getElementById('lowerThreshold');
+
+        resetZoomBtn.addEventListener('click', () => {
+            if (chart) {
+                chart.resetZoom();
+                preserveZoom = true; // リセット後は通常のズーム保持モードに戻る
+            }
+        });
+
+        exportCsvBtn.addEventListener('click', () => {
+            if (chart) {
+                exportChartDataToCsv();
+            }
+        });
+
+        // 閾値の入力イベント
+        upperThresholdInput.addEventListener('input', async (e) => {
+            const value = e.target.value;
+            upperThresholdValue = value === '' ? null : parseFloat(value);
+            if (chart) {
+                preserveZoom = true; // 閾値変更時はズームを保持
+                await renderChartFromFiles();
+            }
+        });
+
+        lowerThresholdInput.addEventListener('input', async (e) => {
+            const value = e.target.value;
+            lowerThresholdValue = value === '' ? null : parseFloat(value);
+            if (chart) {
+                preserveZoom = true; // 閾値変更時はズームを保持
+                await renderChartFromFiles();
+            }
+        });
+
+        csvInput.addEventListener('change', async (e) => {
+            const files = Array.from(e.target.files);
+
+            if (files.length === 0) return;
+
+            uploadedFiles = files;
+
+            // ファイルごとのオフセットを初期化
+            fileOffsets.clear();
+            files.forEach(file => fileOffsets.set(file.name, 0));
+
+            // ファイルリストを表示
+            displayFileList(files);
+
+            // 新しいファイルアップロード時はズームをリセット
+            preserveZoom = false;
+
+            // グラフを描画
+            await renderChartFromFiles();
+        });
+
+        // ファイルリストを表示する関数
+        function displayFileList(files) {
+            fileListContainer.innerHTML = '';
+
+            files.forEach((file, index) => {
+                const fileItem = document.createElement('div');
+                fileItem.className = 'file-item-control';
+
+                const fileName = document.createElement('span');
+                fileName.className = 'file-name';
+                fileName.textContent = file.name;
+
+                const offsetInput = document.createElement('input');
+                offsetInput.type = 'number';
+                offsetInput.className = 'offset-input';
+                offsetInput.value = '0';
+                offsetInput.step = '1';
+                offsetInput.placeholder = '位置補正';
+                offsetInput.dataset.fileName = file.name;
+
+                offsetInput.addEventListener('input', async (e) => {
+                    const offset = parseInt(e.target.value) || 0;
+                    fileOffsets.set(file.name, offset);
+                    preserveZoom = false; // オフセット変更時はズームをリセット
+                    await renderChartFromFiles();
+                });
+
+                fileItem.appendChild(fileName);
+                fileItem.appendChild(offsetInput);
+
+                fileListContainer.appendChild(fileItem);
+            });
+
+            // 閾値セクションとオフセットセクションを表示
+            thresholdSection.style.display = 'flex';
+            offsetSection.style.display = 'flex';
+        }
+
+        // ファイルからグラフを描画する関数
+        async function renderChartFromFiles() {
+            const parsedData = [];
+            let minIndex = 0;
+            let maxIndex = 0;
+
+            // すべてのファイルを解析してインデックス範囲を計算
+            for (let i = 0; i < uploadedFiles.length; i++) {
+                const file = uploadedFiles[i];
+                try {
+                    const text = await file.text();
+                    const offset = fileOffsets.get(file.name) || 0;
+                    const result = parseCSV(text, file.name.replace('.csv', ''), offset);
+                    parsedData.push(result);
+
+                    // インデックスの範囲を更新
+                    if (result.minIndex < minIndex) minIndex = result.minIndex;
+                    if (result.maxIndex > maxIndex) maxIndex = result.maxIndex;
+                } catch (error) {
+                    console.error(`Error parsing ${file.name}:`, error);
+                    alert(`${file.name}の読み込みに失敗しました: ${error.message}`);
+                }
+            }
+
+            // X軸のラベルを生成（minIndexからmaxIndexまで）
+            const labels = [];
+            for (let i = minIndex; i <= maxIndex; i++) {
+                labels.push(i.toString());
+            }
+
+            // データセットを再構築
+            const datasets = [];
+            const thresholdViolations = []; // 閾値違反のデータを保存
+            let colorIndex = 0;
+
+            parsedData.forEach(fileData => {
+                fileData.datasets.forEach(dataset => {
+                    // X軸インデックスに対応するマップを作成
+                    const dataMap = new Map(dataset.data.map(point => [point.x, point.y]));
+
+                    // ラベルの順序に従ってデータを並べ替え
+                    const orderedData = labels.map(label => dataMap.get(label) || null);
+
+                    datasets.push({
+                        label: dataset.label,
+                        data: orderedData,
+                        borderColor: colors[colorIndex % colors.length],
+                        backgroundColor: colors[colorIndex % colors.length].replace('rgb', 'rgba').replace(')', ', 0.1)'),
+                        tension: 0,
+                        borderWidth: 2,
+                        pointRadius: 0,
+                        pointHoverRadius: 0,
+                        fill: false,
+                        spanGaps: true
+                    });
+
+                    // 閾値を超えた部分を検出
+                    if (upperThresholdValue !== null || lowerThresholdValue !== null) {
+                        const violationData = orderedData.map(value => {
+                            if (value === null) return null;
+                            const exceedsUpper = upperThresholdValue !== null && value > upperThresholdValue;
+                            const exceedsLower = lowerThresholdValue !== null && value < lowerThresholdValue;
+                            return (exceedsUpper || exceedsLower) ? value : null;
+                        });
+
+                        // 違反データがあれば保存（線として表示）
+                        if (violationData.some(v => v !== null)) {
+                            thresholdViolations.push({
+                                label: dataset.label + ' (閾値超過)',
+                                data: violationData,
+                                originalColor: colors[colorIndex % colors.length]
+                            });
+                        }
+                    }
+
+                    colorIndex++;
+                });
+            });
+
+            // 閾値の線を追加
+            if (upperThresholdValue !== null) {
+                datasets.push({
+                    label: '上限閾値',
+                    data: new Array(labels.length).fill(upperThresholdValue),
+                    borderColor: 'rgb(255, 0, 0)',
+                    backgroundColor: 'rgba(255, 0, 0, 0.1)',
+                    borderWidth: 2,
+                    borderDash: [5, 5],
+                    pointRadius: 0,
+                    pointHoverRadius: 0,
+                    fill: false,
+                    tension: 0
+                });
+            }
+
+            if (lowerThresholdValue !== null) {
+                datasets.push({
+                    label: '下限閾値',
+                    data: new Array(labels.length).fill(lowerThresholdValue),
+                    borderColor: 'rgb(255, 0, 0)',
+                    backgroundColor: 'rgba(255, 0, 0, 0.1)',
+                    borderWidth: 2,
+                    borderDash: [5, 5],
+                    pointRadius: 0,
+                    pointHoverRadius: 0,
+                    fill: false,
+                    tension: 0
+                });
+            }
+
+            // 閾値違反の線を追加（点滅用）
+            thresholdViolations.forEach(violation => {
+                datasets.push({
+                    label: violation.label,
+                    data: violation.data,
+                    borderColor: 'rgb(255, 0, 0)',
+                    backgroundColor: 'rgba(255, 0, 0, 0.1)',
+                    tension: 0,
+                    borderWidth: 3,
+                    pointRadius: 0,
+                    pointHoverRadius: 0,
+                    fill: false,
+                    spanGaps: false, // 閾値を超えていない部分は線を引かない
+                    isViolation: true // 点滅対象のマーク
+                });
+            });
+
+            if (datasets.length > 0) {
+                renderChart(datasets, labels);
+            }
+        }
+
+        function parseCSV(text, fileName, offset = 0) {
+            const lines = text.trim().split('\n');
+            if (lines.length < 2) {
+                throw new Error('CSVファイルが空か、データが不足しています');
+            }
+
+            // ヘッダー行を解析
+            const headers = lines[0].split(',').map(h => h.trim());
+            const columnCount = headers.length;
+
+            if (columnCount < 1) {
+                throw new Error('CSVファイルには少なくとも1列が必要です');
+            }
+
+            // 各列のデータを格納する配列を初期化（すべての列をデータとして使用）
+            const datasets = [];
+            for (let col = 0; col < columnCount; col++) {
+                datasets.push({
+                    label: `${fileName} - ${headers[col]}`,
+                    data: []
+                });
+            }
+
+            // データの範囲を計算
+            const dataRowCount = lines.length - 1; // ヘッダーを除く
+            const minIndex = offset;
+            const maxIndex = offset + dataRowCount - 1;
+
+            // データ行を解析
+            for (let i = 1; i < lines.length; i++) {
+                const line = lines[i].trim();
+                if (!line) continue;
+
+                const values = line.split(',');
+                if (values.length >= 1) {
+                    // データ行のインデックス（0始まり）にオフセットを加える
+                    const dataIndex = i - 1; // 0始まりのデータ行インデックス
+                    const xValue = (dataIndex + offset).toString();
+
+                    // すべての列を処理
+                    for (let col = 0; col < Math.min(values.length, columnCount); col++) {
+                        const yValue = parseFloat(values[col].trim());
+                        if (!isNaN(yValue)) {
+                            datasets[col].data.push({ x: xValue, y: yValue });
+                        }
+                    }
+                }
+            }
+
+            return { datasets, minIndex, maxIndex };
+        }
+
+        function renderChart(datasets, labels) {
+            const ctx = document.getElementById('myChart').getContext('2d');
+
+            // 既存のズーム状態を保存（preserveZoomがtrueの場合のみ）
+            let savedZoom = null;
+            if (chart && preserveZoom) {
+                savedZoom = {
+                    x: {
+                        min: chart.scales.x.min,
+                        max: chart.scales.x.max
+                    },
+                    y: {
+                        min: chart.scales.y.min,
+                        max: chart.scales.y.max
+                    }
+                };
+            }
+
+            if (chart) {
+                chart.destroy();
+            }
+
+            chart = new Chart(ctx, {
+                type: 'line',
+                data: { labels, datasets },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            display: true,
+                            position: 'top',
+                            labels: {
+                                usePointStyle: true,
+                                padding: 15,
+                                font: {
+                                    size: 12
+                                }
+                            }
+                        },
+                        tooltip: {
+                            mode: 'index',
+                            intersect: false,
+                            backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                            padding: 12,
+                            titleFont: {
+                                size: 14
+                            },
+                            bodyFont: {
+                                size: 13
+                            },
+                            callbacks: {
+                                title: function() {
+                                    return '';  // タイトル（行番号）を非表示
+                                }
+                            }
+                        },
+                        zoom: {
+                            zoom: {
+                                wheel: {
+                                    enabled: true,
+                                },
+                                pinch: {
+                                    enabled: true
+                                },
+                                drag: {
+                                    enabled: true,
+                                    backgroundColor: 'rgba(102, 126, 234, 0.2)',
+                                    borderColor: 'rgba(102, 126, 234, 0.8)',
+                                    borderWidth: 1,
+                                    threshold: 50,
+                                },
+                                mode: 'xy',
+                            },
+                            pan: {
+                                enabled: true,
+                                mode: 'xy',
+                                modifierKey: 'shift',
+                            },
+                            limits: {
+                                x: {min: 'original', max: 'original'},
+                                y: {min: 'original', max: 'original'}
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            type: 'category',
+                            display: true,
+                            title: {
+                                display: false
+                            },
+                            ticks: {
+                                display: false
+                            },
+                            grid: {
+                                display: true,
+                                color: 'rgba(0, 0, 0, 0.05)'
+                            }
+                        },
+                        y: {
+                            display: true,
+                            title: {
+                                display: false
+                            },
+                            grid: {
+                                display: true,
+                                color: 'rgba(0, 0, 0, 0.05)'
+                            }
+                        }
+                    },
+                    interaction: {
+                        mode: 'nearest',
+                        axis: 'x',
+                        intersect: false
+                    }
+                }
+            });
+
+            // ズーム状態を復元
+            if (savedZoom) {
+                chart.zoomScale('x', { min: savedZoom.x.min, max: savedZoom.x.max }, 'none');
+                chart.zoomScale('y', { min: savedZoom.y.min, max: savedZoom.y.max }, 'none');
+            }
+
+            // 次回以降はズームを保持する
+            preserveZoom = true;
+
+            // ズームリセットボタンとCSV出力ボタンを表示
+            resetZoomBtn.style.display = 'inline-block';
+            exportCsvBtn.style.display = 'inline-block';
+
+            // 既存の点滅タイマーをクリア
+            if (blinkTimer) {
+                clearInterval(blinkTimer);
+            }
+
+            // 閾値違反がある場合は点滅を開始
+            const violationDatasets = datasets.filter(d => d.isViolation);
+            if (violationDatasets.length > 0) {
+                blinkTimer = setInterval(() => {
+                    blinkState = !blinkState;
+                    violationDatasets.forEach(dataset => {
+                        if (blinkState) {
+                            dataset.borderColor = 'rgb(255, 0, 0)';
+                            dataset.borderWidth = 3;
+                        } else {
+                            dataset.borderColor = 'rgba(255, 0, 0, 0.2)';
+                            dataset.borderWidth = 3;
+                        }
+                    });
+                    chart.update('none'); // アニメーションなしで更新
+                }, 500); // 500msごとに点滅
+            }
+        }
+
+        // グラフデータをCSVファイルとして出力する関数
+        function exportChartDataToCsv() {
+            if (!chart || !chart.data.labels || chart.data.labels.length === 0) {
+                alert('出力するデータがありません');
+                return;
+            }
+
+            const labels = chart.data.labels;
+            const datasets = chart.data.datasets;
+
+            // ズームされている範囲を取得
+            const xScale = chart.scales.x;
+            const minIndex = Math.floor(xScale.min);
+            const maxIndex = Math.ceil(xScale.max);
+
+            // 表示範囲内のラベルとデータのみを抽出
+            const visibleLabels = labels.slice(minIndex, maxIndex + 1);
+
+            // CSVヘッダーを作成
+            let csvContent = 'index';
+            datasets.forEach(dataset => {
+                csvContent += ',' + dataset.label;
+            });
+            csvContent += '\n';
+
+            // データ行を作成（表示範囲のみ）
+            for (let i = 0; i < visibleLabels.length; i++) {
+                const originalIndex = minIndex + i;
+                csvContent += visibleLabels[i];
+                datasets.forEach(dataset => {
+                    const value = dataset.data[originalIndex];
+                    csvContent += ',' + (value !== null && value !== undefined ? value : '');
+                });
+                csvContent += '\n';
+            }
+
+            // CSVファイルをダウンロード
+            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement('a');
+            const url = URL.createObjectURL(blob);
+
+            // 現在の日時でファイル名を生成
+            const now = new Date();
+            const timestamp = now.getFullYear() +
+                String(now.getMonth() + 1).padStart(2, '0') +
+                String(now.getDate()).padStart(2, '0') + '_' +
+                String(now.getHours()).padStart(2, '0') +
+                String(now.getMinutes()).padStart(2, '0') +
+                String(now.getSeconds()).padStart(2, '0');
+            const filename = `graph_data_${timestamp}.csv`;
+
+            link.setAttribute('href', url);
+            link.setAttribute('download', filename);
+            link.style.visibility = 'hidden';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+    </script>
+</body>
+</html>
