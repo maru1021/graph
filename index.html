@@ -5,8 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>グラフツクール君2号</title>
     <script src="libs/chart.umd.js"></script>
-    <script src="libs/hammer.min.js"></script>
     <script src="libs/chartjs-plugin-zoom.min.js"></script>
+    <script src="libs/xlsx.full.min.js"></script>
     <style>
         * {
             margin: 0;
@@ -246,9 +246,9 @@
             <div class="header-wrapper">
                 <h1>グラフツクール君2号</h1>
                 <div class="header-buttons">
-                    <input type="file" id="csvInput" multiple accept=".csv">
+                    <input type="file" id="csvInput" multiple accept=".csv,.xlsx,.xls">
                     <label for="csvInput" class="file-input-label">
-                        CSVファイルを選択（複数可）
+                        ファイルを選択（複数可）
                     </label>
                     <button id="resetZoomBtn" class="file-input-label" style="display: none;">
                         ズームリセット
@@ -515,7 +515,8 @@
             // 軸選択のイベントリスナー
             elements.select.addEventListener('change', async (e) => {
                 yAxisConfigs[index].axis = e.target.value;
-                if (chart && yAxisConfigs[index].enabled) {
+                // 列が選択されている場合は再描画（enabledに関わらず）
+                if (chart && yAxisConfigs[index].pattern) {
                     preserveZoom = true;
                     await renderChartFromFiles();
                 }
@@ -638,14 +639,33 @@
             for (let i = 0; i < uploadedFiles.length; i++) {
                 const file = uploadedFiles[i];
                 try {
-                    const text = await file.text();
                     const offset = fileOffsets.get(file.name) || 0;
-                    const result = parseCSV(text, file.name.replace('.csv', ''), offset);
-                    parsedData.push(result);
 
-                    // インデックスの範囲を更新
-                    if (result.minIndex < minIndex) minIndex = result.minIndex;
-                    if (result.maxIndex > maxIndex) maxIndex = result.maxIndex;
+                    // ファイル拡張子で判別
+                    const fileName = file.name.toLowerCase();
+                    if (fileName.endsWith('.xlsx') || fileName.endsWith('.xls')) {
+                        // Excelファイル（全シート対応、配列を返す）
+                        const cleanName = file.name.replace(/\.(xlsx|xls)$/i, '');
+                        const results = await parseExcel(file, cleanName, offset);
+
+                        // 各シートのデータを追加
+                        for (const result of results) {
+                            parsedData.push(result);
+                            // インデックスの範囲を更新
+                            if (result.minIndex < minIndex) minIndex = result.minIndex;
+                            if (result.maxIndex > maxIndex) maxIndex = result.maxIndex;
+                        }
+                    } else {
+                        // CSVファイル
+                        const text = await file.text();
+                        const cleanName = file.name.replace('.csv', '');
+                        const result = parseCSV(text, cleanName, offset);
+
+                        parsedData.push(result);
+                        // インデックスの範囲を更新
+                        if (result.minIndex < minIndex) minIndex = result.minIndex;
+                        if (result.maxIndex > maxIndex) maxIndex = result.maxIndex;
+                    }
                 } catch (error) {
                     console.error(`Error parsing ${file.name}:`, error);
                     alert(`${file.name}の読み込みに失敗しました: ${error.message}`);
@@ -654,9 +674,27 @@
 
             // X軸selectと第2軸selectの選択肢を更新
             const columnNames = new Set();
+            // ファイル名とその元のファイル名を対応させるマップ（シート名対応版）
+            const fileDataToOriginalName = new Map();
+            uploadedFiles.forEach(file => {
+                const cleanName = file.name.replace(/\.(csv|xlsx|xls)$/i, '');
+                fileDataToOriginalName.set(cleanName, file.name);
+            });
+            // parsedDataからシート名付きのファイル名もマッピング（"ファイル名_シート名" -> "ファイル名.xlsx"）
+            parsedData.forEach(fileData => {
+                const originalFile = uploadedFiles.find(f => {
+                    const cleanName = f.name.replace(/\.(csv|xlsx|xls)$/i, '');
+                    return fileData.fileName === cleanName || fileData.fileName.startsWith(cleanName + '_');
+                });
+                if (originalFile) {
+                    fileDataToOriginalName.set(fileData.fileName, originalFile.name);
+                }
+            });
+
             parsedData.forEach(fileData => {
                 // 除外されたファイルをスキップ
-                if (excludedFiles.includes(fileData.fileName + '.csv')) {
+                const originalFileName = fileDataToOriginalName.get(fileData.fileName) || fileData.fileName;
+                if (excludedFiles.includes(originalFileName)) {
                     return;
                 }
 
@@ -767,9 +805,17 @@
                 excludeContainer.appendChild(label);
             });
 
-            // ファイル名のチェックボックスを追加
+            // ファイル/シート名のチェックボックスを追加（重複排除）
+            const addedFileNames = new Set();
             parsedData.forEach(fileData => {
-                const fileName = fileData.fileName + '.csv';
+                const originalFileName = fileDataToOriginalName.get(fileData.fileName) || fileData.fileName;
+
+                // 既に追加済みの場合はスキップ（重複防止）
+                if (addedFileNames.has(originalFileName)) {
+                    return;
+                }
+                addedFileNames.add(originalFileName);
+
                 const label = document.createElement('label');
                 label.style.display = 'flex';
                 label.style.alignItems = 'center';
@@ -782,16 +828,16 @@
 
                 const checkbox = document.createElement('input');
                 checkbox.type = 'checkbox';
-                checkbox.value = fileName;
-                checkbox.checked = currentExcludedFiles.includes(fileName);
+                checkbox.value = originalFileName;
+                checkbox.checked = currentExcludedFiles.includes(originalFileName);
 
                 checkbox.addEventListener('change', async (e) => {
                     if (e.target.checked) {
-                        if (!excludedFiles.includes(fileName)) {
-                            excludedFiles.push(fileName);
+                        if (!excludedFiles.includes(originalFileName)) {
+                            excludedFiles.push(originalFileName);
                         }
                     } else {
-                        const index = excludedFiles.indexOf(fileName);
+                        const index = excludedFiles.indexOf(originalFileName);
                         if (index > -1) {
                             excludedFiles.splice(index, 1);
                         }
@@ -803,7 +849,7 @@
                 });
 
                 const span = document.createElement('span');
-                span.textContent = fileName;
+                span.textContent = originalFileName;
                 span.style.fontSize = '12px';
                 span.style.fontWeight = '500';
 
@@ -816,21 +862,24 @@
             const datasets = [];
             const thresholdViolations = []; // 閾値違反のデータを保存
 
-            // ファイル名ごとにインデックスを取得するマップ
+            // ファイル名（シート名含む）ごとにインデックスを取得するマップ
             const fileNameToIndex = new Map();
-            uploadedFiles.forEach((file, index) => {
-                fileNameToIndex.set(file.name.replace('.csv', ''), index);
+            let colorIndex = 0;
+            parsedData.forEach((fileData) => {
+                fileNameToIndex.set(fileData.fileName, colorIndex);
+                colorIndex++;
             });
 
             parsedData.forEach(fileData => {
                 // 除外されたファイルをスキップ
-                if (excludedFiles.includes(fileData.fileName + '.csv')) {
+                const originalFileName = fileDataToOriginalName.get(fileData.fileName) || fileData.fileName;
+                if (excludedFiles.includes(originalFileName)) {
                     return;
                 }
 
                 // X軸データを探す
                 let xAxisData = null;
-                const fileOffset = fileOffsets.get(fileData.fileName + '.csv') || 0; // ファイルのオフセットを取得
+                const fileOffset = fileOffsets.get(originalFileName) || 0; // ファイルのオフセットを取得
 
                 if (xAxisPattern) {
                     const xAxisDataset = fileData.datasets.find(dataset => {
@@ -1057,6 +1106,82 @@
             return { datasets, minIndex, maxIndex, fileName };
         }
 
+        // Excelファイルを解析する関数（全シート対応）
+        async function parseExcel(file, fileName, offset = 0) {
+            const arrayBuffer = await file.arrayBuffer();
+            const workbook = XLSX.read(arrayBuffer, { type: 'array' });
+
+            const results = []; // 全シートのデータを格納
+
+            // 全シートをループ処理
+            for (let sheetIndex = 0; sheetIndex < workbook.SheetNames.length; sheetIndex++) {
+                const sheetName = workbook.SheetNames[sheetIndex];
+                const worksheet = workbook.Sheets[sheetName];
+
+                // シートをJSONに変換（ヘッダー行を含む）
+                const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+
+                // 空のシートや不十分なデータはスキップ
+                if (!jsonData || jsonData.length < 2) {
+                    continue;
+                }
+
+                // ヘッダー行を取得
+                const headers = jsonData[0].map(h => h ? h.toString().trim() : '');
+                const columnCount = headers.length;
+
+                if (columnCount < 1) {
+                    continue;
+                }
+
+                // シート名をファイル名に含める（複数シートの場合のみ）
+                const sheetFileName = workbook.SheetNames.length > 1
+                    ? `${fileName}_${sheetName}`
+                    : fileName;
+
+                // 各列のデータを格納する配列を初期化
+                const datasets = [];
+                for (let col = 0; col < columnCount; col++) {
+                    datasets.push({
+                        label: `${sheetFileName} - ${headers[col]}`,
+                        data: []
+                    });
+                }
+
+                // データの範囲を計算
+                const dataRowCount = jsonData.length - 1; // ヘッダーを除く
+                const minIndex = offset;
+                const maxIndex = offset + dataRowCount - 1;
+
+                // データ行を解析
+                for (let i = 1; i < jsonData.length; i++) {
+                    const row = jsonData[i];
+                    if (!row || row.length === 0) continue;
+
+                    // データ行のインデックス（0始まり）にオフセットを加える
+                    const dataIndex = i - 1; // 0始まりのデータ行インデックス
+                    const xValue = (dataIndex + offset).toString();
+
+                    // すべての列を処理
+                    for (let col = 0; col < Math.min(row.length, columnCount); col++) {
+                        const yValue = parseFloat(row[col]);
+                        if (!isNaN(yValue)) {
+                            datasets[col].data.push({ x: xValue, y: yValue });
+                        }
+                    }
+                }
+
+                results.push({ datasets, minIndex, maxIndex, fileName: sheetFileName });
+            }
+
+            // シートが1つもない場合はエラー
+            if (results.length === 0) {
+                throw new Error('Excelファイルに有効なデータシートがありません');
+            }
+
+            return results; // 配列を返す
+        }
+
         // 第2軸IDを取得する関数
         function getYAxisID(label, fileName) {
             // ラベルから列名を抽出 ("fileName - columnName" から列名部分)
@@ -1169,20 +1294,20 @@
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
-                    resizeDelay: 100, // リサイズ時の更新遅延（ミリ秒）
+                    resizeDelay: 200, // リサイズ時の更新遅延（ミリ秒）
                     animation: false, // アニメーション完全無効化
                     plugins: {
                         decimation: {
                             enabled: true,
                             algorithm: 'lttb', // Largest-Triangle-Three-Buckets アルゴリズム
-                            samples: 500 // 表示時の最大サンプル数
+                            samples: 400 // 表示時の最大サンプル数（軽量化）
                         },
                         legend: {
                             display: true,
                             position: 'top',
                             labels: {
                                 usePointStyle: true,
-                                padding: 15,
+                                padding: 12,
                                 font: {
                                     size: 12
                                 }
@@ -1253,9 +1378,6 @@
                             zoom: {
                                 wheel: {
                                     enabled: true,
-                                },
-                                pinch: {
-                                    enabled: true
                                 },
                                 drag: {
                                     enabled: true,
@@ -1480,7 +1602,7 @@
                         }
                     });
                     chart.update('none'); // アニメーションなしで更新
-                }, 800); // 800msごとに点滅（負荷軽減）
+                }, 1200); // 1200msごとに点滅（負荷軽減）
             }
         }
 
