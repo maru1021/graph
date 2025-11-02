@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>グラフツクール君2号</title>
+    <title>折れ線グラフツクール君2号</title>
     <script src="libs/chart.umd.js"></script>
     <script src="libs/hammer.min.js"></script>
     <script src="libs/chartjs-plugin-zoom.min.js"></script>
@@ -78,16 +78,6 @@
             position: relative;
             height: 600px;
             margin-top: 20px;
-        }
-
-        .chart-container canvas {
-            position: relative;
-            z-index: 1000;
-        }
-
-        /* Chart.jsのズームプラグインのドラッグ矩形を最前面に */
-        .chartjs-zoom-drag-rect {
-            z-index: 2000 !important;
         }
 
         .file-input-wrapper {
@@ -244,7 +234,7 @@
     <div class="container">
         <div class="card">
             <div class="header-wrapper">
-                <h1>グラフツクール君2号</h1>
+                <h1>折れ線グラフツクール君1号</h1>
                 <div class="header-buttons">
                     <input type="file" id="csvInput" multiple accept=".csv">
                     <label for="csvInput" class="file-input-label">
@@ -427,30 +417,22 @@
         const upperThresholdInput = document.getElementById('upperThreshold');
         const lowerThresholdInput = document.getElementById('lowerThreshold');
 
-        // 第2軸入力要素（配列化）
-        const yAxisElements = [
-            {
-                select: document.getElementById('yAxis1Select'),
-                check: document.getElementById('yAxis1Check'),
-                input: document.getElementById('yAxis1Input'),
-                columnSelect: document.getElementById('yAxis1ColumnSelect'),
-                typeSelect: document.getElementById('yAxis1TypeSelect')
-            },
-            {
-                select: document.getElementById('yAxis2Select'),
-                check: document.getElementById('yAxis2Check'),
-                input: document.getElementById('yAxis2Input'),
-                columnSelect: document.getElementById('yAxis2ColumnSelect'),
-                typeSelect: document.getElementById('yAxis2TypeSelect')
-            },
-            {
-                select: document.getElementById('yAxis3Select'),
-                check: document.getElementById('yAxis3Check'),
-                input: document.getElementById('yAxis3Input'),
-                columnSelect: document.getElementById('yAxis3ColumnSelect'),
-                typeSelect: document.getElementById('yAxis3TypeSelect')
-            }
-        ];
+        // 第2軸入力要素
+        const yAxis1Select = document.getElementById('yAxis1Select');
+        const yAxis1Check = document.getElementById('yAxis1Check');
+        const yAxis1Input = document.getElementById('yAxis1Input');
+        const yAxis1ColumnSelect = document.getElementById('yAxis1ColumnSelect');
+        const yAxis1TypeSelect = document.getElementById('yAxis1TypeSelect');
+        const yAxis2Select = document.getElementById('yAxis2Select');
+        const yAxis2Check = document.getElementById('yAxis2Check');
+        const yAxis2Input = document.getElementById('yAxis2Input');
+        const yAxis2ColumnSelect = document.getElementById('yAxis2ColumnSelect');
+        const yAxis2TypeSelect = document.getElementById('yAxis2TypeSelect');
+        const yAxis3Select = document.getElementById('yAxis3Select');
+        const yAxis3Check = document.getElementById('yAxis3Check');
+        const yAxis3Input = document.getElementById('yAxis3Input');
+        const yAxis3ColumnSelect = document.getElementById('yAxis3ColumnSelect');
+        const yAxis3TypeSelect = document.getElementById('yAxis3TypeSelect');
 
         resetZoomBtn.addEventListener('click', () => {
             if (chart) {
@@ -493,79 +475,176 @@
             }
         });
 
-        // 閾値の入力イベント（統合）
-        const thresholdInputs = [
-            { input: upperThresholdInput, setValue: (val) => upperThresholdValue = val },
-            { input: lowerThresholdInput, setValue: (val) => lowerThresholdValue = val }
-        ];
-
-        thresholdInputs.forEach(({ input, setValue }) => {
-            input.addEventListener('input', async (e) => {
-                const value = e.target.value;
-                setValue(value === '' ? null : parseFloat(value));
-                if (chart) {
-                    preserveZoom = true;
-                    await renderChartFromFiles();
-                }
-            });
+        // 閾値の入力イベント
+        upperThresholdInput.addEventListener('input', async (e) => {
+            const value = e.target.value;
+            upperThresholdValue = value === '' ? null : parseFloat(value);
+            if (chart) {
+                preserveZoom = true; // 閾値変更時はズームを保持
+                await renderChartFromFiles();
+            }
         });
 
-        // 第2軸設定のイベントリスナー（ループ化）
-        yAxisElements.forEach((elements, index) => {
-            // 軸選択のイベントリスナー
-            elements.select.addEventListener('change', async (e) => {
-                yAxisConfigs[index].axis = e.target.value;
-                if (chart && yAxisConfigs[index].enabled) {
-                    preserveZoom = true;
-                    await renderChartFromFiles();
-                }
-            });
+        lowerThresholdInput.addEventListener('input', async (e) => {
+            const value = e.target.value;
+            lowerThresholdValue = value === '' ? null : parseFloat(value);
+            if (chart) {
+                preserveZoom = true; // 閾値変更時はズームを保持
+                await renderChartFromFiles();
+            }
+        });
 
-            // 「含む」チェックボックスのイベントリスナー
-            elements.check.addEventListener('change', async (e) => {
-                yAxisConfigs[index].enabled = e.target.checked;
-                // チェック状態に応じて表示を切り替え
-                if (e.target.checked) {
-                    elements.input.style.display = '';
-                    elements.columnSelect.style.display = 'none';
-                } else {
-                    elements.input.style.display = 'none';
-                    elements.columnSelect.style.display = '';
-                    // selectの値をpatternに反映
-                    yAxisConfigs[index].pattern = elements.columnSelect.value;
-                }
-                if (chart) {
-                    preserveZoom = true;
-                    await renderChartFromFiles();
-                }
-            });
+        // 第2軸設定のイベントリスナー
+        yAxis1Select.addEventListener('change', async (e) => {
+            yAxisConfigs[0].axis = e.target.value;
+            if (chart && yAxisConfigs[0].enabled) {
+                preserveZoom = true;
+                await renderChartFromFiles();
+            }
+        });
 
-            // テキスト入力のイベントリスナー
-            elements.input.addEventListener('input', async (e) => {
-                yAxisConfigs[index].pattern = e.target.value.trim();
-                if (chart && elements.check.checked) {
-                    preserveZoom = true;
-                    await renderChartFromFiles();
-                }
-            });
+        yAxis1Check.addEventListener('change', async (e) => {
+            yAxisConfigs[0].enabled = e.target.checked;
+            // チェック状態に応じて表示を切り替え
+            if (e.target.checked) {
+                yAxis1Input.style.display = '';
+                yAxis1ColumnSelect.style.display = 'none';
+            } else {
+                yAxis1Input.style.display = 'none';
+                yAxis1ColumnSelect.style.display = '';
+                // selectの値をpatternに反映
+                yAxisConfigs[0].pattern = yAxis1ColumnSelect.value;
+            }
+            if (chart) {
+                preserveZoom = true;
+                await renderChartFromFiles();
+            }
+        });
 
-            // 列名selectのイベントリスナー
-            elements.columnSelect.addEventListener('change', async (e) => {
-                yAxisConfigs[index].pattern = e.target.value;
-                if (chart) {
-                    preserveZoom = true;
-                    await renderChartFromFiles();
-                }
-            });
+        yAxis1Input.addEventListener('input', async (e) => {
+            yAxisConfigs[0].pattern = e.target.value.trim();
+            if (chart && yAxis1Check.checked) {
+                preserveZoom = true;
+                await renderChartFromFiles();
+            }
+        });
 
-            // グラフの種類selectのイベントリスナー
-            elements.typeSelect.addEventListener('change', async (e) => {
-                yAxisConfigs[index].chartType = e.target.value;
-                if (chart) {
-                    preserveZoom = true;
-                    await renderChartFromFiles();
-                }
-            });
+        yAxis2Select.addEventListener('change', async (e) => {
+            yAxisConfigs[1].axis = e.target.value;
+            if (chart && yAxisConfigs[1].enabled) {
+                preserveZoom = true;
+                await renderChartFromFiles();
+            }
+        });
+
+        yAxis2Check.addEventListener('change', async (e) => {
+            yAxisConfigs[1].enabled = e.target.checked;
+            // チェック状態に応じて表示を切り替え
+            if (e.target.checked) {
+                yAxis2Input.style.display = '';
+                yAxis2ColumnSelect.style.display = 'none';
+            } else {
+                yAxis2Input.style.display = 'none';
+                yAxis2ColumnSelect.style.display = '';
+                // selectの値をpatternに反映
+                yAxisConfigs[1].pattern = yAxis2ColumnSelect.value;
+            }
+            if (chart) {
+                preserveZoom = true;
+                await renderChartFromFiles();
+            }
+        });
+
+        yAxis2Input.addEventListener('input', async (e) => {
+            yAxisConfigs[1].pattern = e.target.value.trim();
+            if (chart && yAxis2Check.checked) {
+                preserveZoom = true;
+                await renderChartFromFiles();
+            }
+        });
+
+        yAxis3Select.addEventListener('change', async (e) => {
+            yAxisConfigs[2].axis = e.target.value;
+            if (chart && yAxisConfigs[2].enabled) {
+                preserveZoom = true;
+                await renderChartFromFiles();
+            }
+        });
+
+        yAxis3Check.addEventListener('change', async (e) => {
+            yAxisConfigs[2].enabled = e.target.checked;
+            // チェック状態に応じて表示を切り替え
+            if (e.target.checked) {
+                yAxis3Input.style.display = '';
+                yAxis3ColumnSelect.style.display = 'none';
+            } else {
+                yAxis3Input.style.display = 'none';
+                yAxis3ColumnSelect.style.display = '';
+                // selectの値をpatternに反映
+                yAxisConfigs[2].pattern = yAxis3ColumnSelect.value;
+            }
+            if (chart) {
+                preserveZoom = true;
+                await renderChartFromFiles();
+            }
+        });
+
+        yAxis3Input.addEventListener('input', async (e) => {
+            yAxisConfigs[2].pattern = e.target.value.trim();
+            if (chart && yAxis3Check.checked) {
+                preserveZoom = true;
+                await renderChartFromFiles();
+            }
+        });
+
+        // 列名selectのイベントリスナー
+        yAxis1ColumnSelect.addEventListener('change', async (e) => {
+            yAxisConfigs[0].pattern = e.target.value;
+            if (chart) {
+                preserveZoom = true;
+                await renderChartFromFiles();
+            }
+        });
+
+        yAxis2ColumnSelect.addEventListener('change', async (e) => {
+            yAxisConfigs[1].pattern = e.target.value;
+            if (chart) {
+                preserveZoom = true;
+                await renderChartFromFiles();
+            }
+        });
+
+        yAxis3ColumnSelect.addEventListener('change', async (e) => {
+            yAxisConfigs[2].pattern = e.target.value;
+            if (chart) {
+                preserveZoom = true;
+                await renderChartFromFiles();
+            }
+        });
+
+        // グラフの種類selectのイベントリスナー
+        yAxis1TypeSelect.addEventListener('change', async (e) => {
+            yAxisConfigs[0].chartType = e.target.value;
+            if (chart) {
+                preserveZoom = true;
+                await renderChartFromFiles();
+            }
+        });
+
+        yAxis2TypeSelect.addEventListener('change', async (e) => {
+            yAxisConfigs[1].chartType = e.target.value;
+            if (chart) {
+                preserveZoom = true;
+                await renderChartFromFiles();
+            }
+        });
+
+        yAxis3TypeSelect.addEventListener('change', async (e) => {
+            yAxisConfigs[2].chartType = e.target.value;
+            if (chart) {
+                preserveZoom = true;
+                await renderChartFromFiles();
+            }
         });
 
         csvInput.addEventListener('change', async (e) => {
@@ -670,7 +749,9 @@
 
             // 現在の選択値を保存
             const currentXAxisValue = xAxisSelect.value;
-            const currentYAxisValues = yAxisElements.map(el => el.columnSelect.value);
+            const currentYAxis1Value = yAxis1ColumnSelect.value;
+            const currentYAxis2Value = yAxis2ColumnSelect.value;
+            const currentYAxis3Value = yAxis3ColumnSelect.value;
 
             // X軸selectをクリアして再構築
             xAxisSelect.innerHTML = '<option value="">なし</option>';
@@ -686,21 +767,37 @@
                 xAxisSelect.value = currentXAxisValue;
             }
 
-            // 第2軸のcolumn selectをクリアして再構築（ループ化）
-            yAxisElements.forEach((elements, index) => {
-                elements.columnSelect.innerHTML = '<option value="">なし</option>';
-                Array.from(columnNames).sort().forEach(columnName => {
-                    const option = document.createElement('option');
-                    option.value = columnName;
-                    option.textContent = columnName;
-                    elements.columnSelect.appendChild(option);
-                });
+            // 第2軸のcolumn selectをクリアして再構築
+            yAxis1ColumnSelect.innerHTML = '<option value="">なし</option>';
+            yAxis2ColumnSelect.innerHTML = '<option value="">なし</option>';
+            yAxis3ColumnSelect.innerHTML = '<option value="">なし</option>';
+            Array.from(columnNames).sort().forEach(columnName => {
+                const option1 = document.createElement('option');
+                option1.value = columnName;
+                option1.textContent = columnName;
+                yAxis1ColumnSelect.appendChild(option1);
 
-                // 前の選択値を復元（存在する場合）
-                if (currentYAxisValues[index] && columnNames.has(currentYAxisValues[index])) {
-                    elements.columnSelect.value = currentYAxisValues[index];
-                }
+                const option2 = document.createElement('option');
+                option2.value = columnName;
+                option2.textContent = columnName;
+                yAxis2ColumnSelect.appendChild(option2);
+
+                const option3 = document.createElement('option');
+                option3.value = columnName;
+                option3.textContent = columnName;
+                yAxis3ColumnSelect.appendChild(option3);
             });
+
+            // 前の選択値を復元（存在する場合）
+            if (currentYAxis1Value && columnNames.has(currentYAxis1Value)) {
+                yAxis1ColumnSelect.value = currentYAxis1Value;
+            }
+            if (currentYAxis2Value && columnNames.has(currentYAxis2Value)) {
+                yAxis2ColumnSelect.value = currentYAxis2Value;
+            }
+            if (currentYAxis3Value && columnNames.has(currentYAxis3Value)) {
+                yAxis3ColumnSelect.value = currentYAxis3Value;
+            }
 
             // 全ての列名に対して色系統インデックスを割り当て（常に固定）
             const columnNameToColorFamily = new Map();
@@ -939,33 +1036,46 @@
                 });
             });
 
-            // 閾値の線を追加（ループ化）
-            const thresholds = [
-                { value: upperThresholdValue, label: '上限閾値' },
-                { value: lowerThresholdValue, label: '下限閾値' }
-            ];
+            // 閾値の線を追加
+            if (upperThresholdValue !== null) {
+                datasets.push({
+                    type: 'line', // 常に折れ線グラフ
+                    label: '上限閾値',
+                    data: [
+                        { x: minIndex, y: upperThresholdValue },
+                        { x: maxIndex, y: upperThresholdValue }
+                    ],
+                    borderColor: 'rgb(255, 0, 0)',
+                    backgroundColor: 'rgba(255, 0, 0, 0.1)',
+                    borderWidth: 2,
+                    borderDash: [5, 5],
+                    pointRadius: 0,
+                    pointHoverRadius: 0,
+                    fill: false,
+                    tension: 0,
+                    yAxisID: 'y'
+                });
+            }
 
-            thresholds.forEach(({ value, label }) => {
-                if (value !== null) {
-                    datasets.push({
-                        type: 'line', // 常に折れ線グラフ
-                        label: label,
-                        data: [
-                            { x: minIndex, y: value },
-                            { x: maxIndex, y: value }
-                        ],
-                        borderColor: 'rgb(255, 0, 0)',
-                        backgroundColor: 'rgba(255, 0, 0, 0.1)',
-                        borderWidth: 2,
-                        borderDash: [5, 5],
-                        pointRadius: 0,
-                        pointHoverRadius: 0,
-                        fill: false,
-                        tension: 0,
-                        yAxisID: 'y'
-                    });
-                }
-            });
+            if (lowerThresholdValue !== null) {
+                datasets.push({
+                    type: 'line', // 常に折れ線グラフ
+                    label: '下限閾値',
+                    data: [
+                        { x: minIndex, y: lowerThresholdValue },
+                        { x: maxIndex, y: lowerThresholdValue }
+                    ],
+                    borderColor: 'rgb(255, 0, 0)',
+                    backgroundColor: 'rgba(255, 0, 0, 0.1)',
+                    borderWidth: 2,
+                    borderDash: [5, 5],
+                    pointRadius: 0,
+                    pointHoverRadius: 0,
+                    fill: false,
+                    tension: 0,
+                    yAxisID: 'y'
+                });
+            }
 
             // 閾値違反の線を追加（点滅用）
             thresholdViolations.forEach(violation => {
@@ -1259,11 +1369,10 @@
                                 },
                                 drag: {
                                     enabled: true,
-                                    backgroundColor: 'rgba(102, 126, 234, 0.3)',
-                                    borderColor: 'rgba(102, 126, 234, 1)',
-                                    borderWidth: 2,
+                                    backgroundColor: 'rgba(102, 126, 234, 0.2)',
+                                    borderColor: 'rgba(102, 126, 234, 0.8)',
+                                    borderWidth: 1,
                                     threshold: 50,
-                                    drawTime: 'afterDatasetsDraw'
                                 },
                                 mode: 'xy',
                                 onZoomComplete: function({chart}) {
@@ -1484,8 +1593,24 @@
             }
         }
 
-        // ズーム状態を保存する関数（共通化）
-        function saveCurrentZoomState() {
+        // キーボードの矢印キーでx軸を移動する関数
+        function panXAxis(delta) {
+            if (!chart || !chart.scales.x) return;
+
+            const xScale = chart.scales.x;
+            const currentRange = xScale.max - xScale.min;
+
+            // panメソッドを使用してX軸を移動（deltaをピクセル相当に変換）
+            // X軸の幅を取得し、delta値をピクセルに変換
+            const chartArea = chart.chartArea;
+            const chartWidth = chartArea.right - chartArea.left;
+            const pixelPerUnit = chartWidth / currentRange;
+            const deltaInPixels = delta * pixelPerUnit;
+
+            // Chart.jsのpanメソッドを使用
+            chart.pan({x: deltaInPixels}, undefined, 'none');
+
+            // ズーム状態を保存
             savedZoomState = {
                 x: {
                     min: chart.scales.x.min,
@@ -1511,39 +1636,47 @@
             preserveZoom = true;
         }
 
-        // 軸を移動する汎用関数
-        function panAxis(axis, delta) {
-            if (!chart || !chart.scales[axis]) return;
+        // キーボードの矢印キーでy軸を移動する関数
+        function panYAxis(delta) {
+            if (!chart || !chart.scales.y) return;
 
-            const scale = chart.scales[axis];
-            const currentRange = scale.max - scale.min;
+            const yScale = chart.scales.y;
+            const currentRange = yScale.max - yScale.min;
+
+            // panメソッドを使用してY軸を移動（deltaをピクセル相当に変換）
+            // Y軸の高さを取得し、delta値をピクセルに変換
             const chartArea = chart.chartArea;
-
-            // 軸に応じた幅または高さを取得
-            const dimension = axis === 'x'
-                ? chartArea.right - chartArea.left
-                : chartArea.bottom - chartArea.top;
-
-            const pixelPerUnit = dimension / currentRange;
+            const chartHeight = chartArea.bottom - chartArea.top;
+            const pixelPerUnit = chartHeight / currentRange;
             const deltaInPixels = delta * pixelPerUnit;
 
             // Chart.jsのpanメソッドを使用
-            const panConfig = {};
-            panConfig[axis] = deltaInPixels;
-            chart.pan(panConfig, undefined, 'none');
+            chart.pan({y: deltaInPixels}, undefined, 'none');
 
             // ズーム状態を保存
-            saveCurrentZoomState();
-        }
-
-        // キーボードの矢印キーでx軸を移動する関数
-        function panXAxis(delta) {
-            panAxis('x', delta);
-        }
-
-        // キーボードの矢印キーでy軸を移動する関数
-        function panYAxis(delta) {
-            panAxis('y', delta);
+            savedZoomState = {
+                x: {
+                    min: chart.scales.x.min,
+                    max: chart.scales.x.max
+                },
+                y: {
+                    min: chart.scales.y.min,
+                    max: chart.scales.y.max
+                },
+                y2: chart.scales.y2 ? {
+                    min: chart.scales.y2.min,
+                    max: chart.scales.y2.max
+                } : undefined,
+                y3: chart.scales.y3 ? {
+                    min: chart.scales.y3.min,
+                    max: chart.scales.y3.max
+                } : undefined,
+                y4: chart.scales.y4 ? {
+                    min: chart.scales.y4.min,
+                    max: chart.scales.y4.max
+                } : undefined
+            };
+            preserveZoom = true;
         }
 
         // キーの押下状態を追跡
@@ -1653,9 +1786,7 @@
             // CSVヘッダーを作成
             let csvContent = 'index';
             datasets.forEach(dataset => {
-                // ラベルから列名部分のみを取得（"ファイル名 - 列名" から "列名" を抽出）
-                const columnName = dataset.label.split(' - ')[1] || dataset.label;
-                csvContent += ',' + columnName;
+                csvContent += ',' + dataset.label;
             });
             csvContent += '\n';
 
