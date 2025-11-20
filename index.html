@@ -1,12 +1,16 @@
+{% load static %}
+{% load compress %}
+
+
 <!DOCTYPE html>
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>グラフツクール君2号</title>
-    <script src="libs/chart.umd.js"></script>
-    <script src="libs/chartjs-plugin-zoom.min.js"></script>
-    <script src="libs/xlsx.full.min.js"></script>
+    <script src="{% static 'js/vendor/chartjs/chart.min.js' %}"></script>
+    <script src="{% static 'js/vendor/chartjs/chartjs-plugin-zoom.min.js' %}"></script>
+    <script src="{% static 'js/vendor/xlsx/xlsx.full.min.js' %}"></script>
     <style>
         * {
             margin: 0;
